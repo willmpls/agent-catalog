@@ -1,0 +1,77 @@
+{
+  "type": "record",
+  "name": "InventorySnapshot",
+  "namespace": "com.acme.warehouse",
+  "doc": "Periodic full snapshot of inventory levels, emitted every 15 minutes by the WMS. Consumers use this to rebuild the warehouse dashboard. No delta/change semantics — this is always a complete picture of current stock.",
+  "fields": [
+    {
+      "name": "snapshot_id",
+      "type": "string"
+    },
+    {
+      "name": "snapshot_time",
+      "type": "long",
+      "logicalType": "timestamp-millis"
+    },
+    {
+      "name": "warehouse_id",
+      "type": "string"
+    },
+    {
+      "name": "items",
+      "type": {
+        "type": "array",
+        "items": {
+          "type": "record",
+          "name": "StockLevel",
+          "fields": [
+            {
+              "name": "sku",
+              "type": "string"
+            },
+            {
+              "name": "quantity_on_hand",
+              "type": "int"
+            },
+            {
+              "name": "quantity_reserved",
+              "type": "int"
+            },
+            {
+              "name": "quantity_available",
+              "type": "int",
+              "doc": "on_hand - reserved. Denormalized for convenience."
+            },
+            {
+              "name": "reorder_point",
+              "type": ["null", "int"],
+              "default": null,
+              "doc": "Null if no reorder policy configured for this SKU."
+            },
+            {
+              "name": "bin_locations",
+              "type": {
+                "type": "array",
+                "items": "string"
+              },
+              "default": [],
+              "doc": "Physical bin locations in the warehouse."
+            },
+            {
+              "name": "last_counted_at",
+              "type": ["null", "long"],
+              "default": null,
+              "doc": "Epoch millis of last physical count. Null if never counted."
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "source_system",
+      "type": "string",
+      "default": "wms-v2",
+      "doc": "Which system produced this snapshot."
+    }
+  ]
+}

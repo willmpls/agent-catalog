@@ -1,0 +1,80 @@
+// Example: Tier A hybrid event contract (correct)
+//
+// Demonstrates a well-formed hybrid event contract that includes both
+// `after` (full post-change snapshot) and `update_mask` (what changed),
+// with protovalidate constraints on all high-value invariants.
+// No `patch` field — changed values are read from `after` using `update_mask`.
+//
+// Expected findings: none (clean review)
+//
+// Standard sections exercised:
+//   - Canonical change event pattern / Required fields
+//   - Producer capability tiers / Tier A (hybrid, preferred)
+//   - Data quality / Schema-level (protovalidate)
+//   - Documentation requirements (every element commented)
+
+syntax = "proto3";
+
+package example.orders.v1;
+
+import "buf/validate/validate.proto";
+import "google/protobuf/field_mask.proto";
+import "google/protobuf/timestamp.proto";
+
+// Metadata common to all events in this package.
+message EventMeta {
+  // Globally unique identifier for deduplication.
+  string event_id = 1 [(buf.validate.field).string.min_len = 1];
+  // When the change occurred.
+  google.protobuf.Timestamp event_time = 2 [(buf.validate.field).required = true];
+  // When the platform ingested this event.
+  google.protobuf.Timestamp ingest_time = 3 [(buf.validate.field).required = true];
+  // Identifier of the producing system.
+  string producer = 4 [(buf.validate.field).string.min_len = 1];
+  // Schema version tag for consumer branching during migrations.
+  string schema_version = 5 [(buf.validate.field).string.min_len = 1];
+}
+
+// Change operation for entity lifecycle events.
+enum Operation {
+  // Default/unknown value.
+  OPERATION_UNSPECIFIED = 0;
+  // Entity was created.
+  OPERATION_CREATE     = 1;
+  // Entity was updated.
+  OPERATION_UPDATE     = 2;
+  // Entity was deleted (tombstone).
+  OPERATION_DELETE     = 3;
+  // Periodic full-state snapshot.
+  OPERATION_SNAPSHOT   = 4;
+}
+
+// An order entity.
+message Order {
+  // Stable business key for this order.
+  string order_id = 1 [(buf.validate.field).string.min_len = 1];
+  // The customer who placed this order.
+  string customer_id = 2 [(buf.validate.field).string.min_len = 1];
+  // Human-readable order label.
+  string display_name = 3;
+  // Number of items in the order.
+  int32 quantity = 4 [(buf.validate.field).int32.gte = 0];
+  // Total order value in minor currency units (e.g., cents).
+  int64 total_cents = 5 [(buf.validate.field).int64.gte = 0];
+}
+
+// Change event for the Order entity.
+message OrderChangeEvent {
+  // Event metadata (id, timestamps, producer, version).
+  EventMeta meta = 1 [(buf.validate.field).required = true];
+  // Entity key — top-level for partitioning.
+  string order_id = 2 [(buf.validate.field).string.min_len = 1];
+  // Monotonic per order_id. Strongly recommended for all updates.
+  int64 sequence = 3 [(buf.validate.field).int64.gte = 0];
+  // What kind of change this event represents.
+  Operation op = 4 [(buf.validate.field).enum.defined_only = true];
+  // Paths of fields that changed in this event.
+  google.protobuf.FieldMask update_mask = 5;
+  // Full post-change snapshot (Tier A). No `patch` — read changed values from `after` using `update_mask`.
+  Order after = 6;
+}

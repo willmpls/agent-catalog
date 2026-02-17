@@ -1,0 +1,63 @@
+// Example: Tier A with redundant patch field (should-fix)
+//
+// This event contract is a Tier A hybrid (has `after` + `update_mask`)
+// but also includes a `patch` field. In Tier A, `patch` is redundant —
+// changed values are read from `after` using `update_mask`. Including
+// both creates ambiguity about which is authoritative and increases
+// payload size for no benefit.
+//
+// Expected findings:
+//   - Should-fix: Tier A schema should not include a `patch` field;
+//     `after` + `update_mask` fully describes the change
+//
+// Standard sections exercised:
+//   - Producer capability tiers / Tier A (no `patch`)
+//   - Payload requirements ("Tier A schemas MUST NOT include a `patch` field")
+
+syntax = "proto3";
+
+package example.campaigns.v1;
+
+import "buf/validate/validate.proto";
+import "google/protobuf/field_mask.proto";
+import "google/protobuf/timestamp.proto";
+
+message EventMeta {
+  string event_id = 1 [(buf.validate.field).string.min_len = 1];
+  google.protobuf.Timestamp event_time = 2 [(buf.validate.field).required = true];
+  google.protobuf.Timestamp ingest_time = 3 [(buf.validate.field).required = true];
+  string producer = 4 [(buf.validate.field).string.min_len = 1];
+  string schema_version = 5 [(buf.validate.field).string.min_len = 1];
+}
+
+enum Operation {
+  OPERATION_UNSPECIFIED = 0;
+  OPERATION_CREATE     = 1;
+  OPERATION_UPDATE     = 2;
+  OPERATION_DELETE     = 3;
+  OPERATION_SNAPSHOT   = 4;
+}
+
+message Campaign {
+  string campaign_id = 1 [(buf.validate.field).string.min_len = 1];
+  string display_name = 2;
+  int64 budget_cents = 3 [(buf.validate.field).int64.gte = 0];
+  bool is_active = 4;
+}
+
+message CampaignChangeEvent {
+  EventMeta meta = 1 [(buf.validate.field).required = true];
+  string campaign_id = 2 [(buf.validate.field).string.min_len = 1];
+
+  int64 sequence = 3 [(buf.validate.field).int64.gte = 0];
+  Operation op = 4 [(buf.validate.field).enum.defined_only = true];
+
+  google.protobuf.FieldMask update_mask = 5;
+
+  // Bad: `patch` is redundant when `after` is present (Tier A).
+  // Changed values should be read from `after` using `update_mask`.
+  Campaign patch = 6;
+
+  // Tier A: full post-change snapshot.
+  Campaign after = 7;
+}

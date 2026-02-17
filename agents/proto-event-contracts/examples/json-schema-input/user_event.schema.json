@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://acme.com/schemas/user-event/v1",
+  "title": "UserEvent",
+  "description": "Emitted by the identity service on user account changes. Hybrid: carries both full state and a list of changed fields. Uses ISO-8601 timestamps and string enums.",
+  "type": "object",
+  "required": ["event_id", "timestamp", "action", "user_id", "user"],
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Globally unique event identifier."
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 when the change happened."
+    },
+    "source": {
+      "type": "string",
+      "description": "Producing service name.",
+      "examples": ["identity-svc", "admin-portal"]
+    },
+    "action": {
+      "type": "string",
+      "enum": ["created", "updated", "deleted", "suspended", "reactivated"],
+      "description": "What happened."
+    },
+    "changed_fields": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Field names that changed. Empty on 'created'.",
+      "default": []
+    },
+    "user_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "user": {
+      "type": "object",
+      "description": "Full user state after the change.",
+      "required": ["user_id", "email"],
+      "properties": {
+        "user_id": { "type": "string", "format": "uuid" },
+        "email": { "type": "string", "format": "email" },
+        "display_name": { "type": ["string", "null"] },
+        "phone": { "type": ["string", "null"] },
+        "role": {
+          "type": "string",
+          "enum": ["viewer", "editor", "admin", "owner"]
+        },
+        "is_active": { "type": "boolean" },
+        "mfa_enabled": { "type": "boolean" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "last_login_at": { "type": ["string", "null"], "format": "date-time" },
+        "preferences": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "Key-value user preferences."
+        },
+        "org_memberships": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["org_id", "role"],
+            "properties": {
+              "org_id": { "type": "string", "format": "uuid" },
+              "role": { "type": "string", "enum": ["member", "admin", "billing"] },
+              "joined_at": { "type": "string", "format": "date-time" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

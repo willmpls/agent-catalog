@@ -1,0 +1,50 @@
+[
+  {
+    "fixture": "examples/good/tier_a_hybrid.proto",
+    "expect_clean": true,
+    "severity": null,
+    "keywords": []
+  },
+  {
+    "fixture": "examples/good/tier_b_delta_only.proto",
+    "expect_clean": true,
+    "severity": null,
+    "keywords": []
+  },
+  {
+    "fixture": "examples/needs-review/missing_event_meta.proto",
+    "expect_clean": false,
+    "severity": "must-fix",
+    "keywords": ["EventMeta", "meta"]
+  },
+  {
+    "fixture": "examples/needs-review/missing_update_mask.proto",
+    "expect_clean": false,
+    "severity": "must-fix",
+    "keywords": ["update_mask"]
+  },
+  {
+    "fixture": "examples/needs-review/no_protovalidate.proto",
+    "expect_clean": false,
+    "severity": "should-fix",
+    "keywords": ["protovalidate", "constraint"]
+  },
+  {
+    "fixture": "examples/needs-review/bad_enum.proto",
+    "expect_clean": false,
+    "severity": "should-fix",
+    "keywords": ["UNSPECIFIED", "defined_only", "CREATE"]
+  },
+  {
+    "fixture": "examples/needs-review/delta_without_sequence.proto",
+    "expect_clean": false,
+    "severity": "should-fix",
+    "keywords": ["LWW", "Tier A"]
+  },
+  {
+    "fixture": "examples/needs-review/tier_a_with_redundant_patch.proto",
+    "expect_clean": false,
+    "severity": "should-fix",
+    "keywords": ["patch", "Tier A"]
+  }
+]

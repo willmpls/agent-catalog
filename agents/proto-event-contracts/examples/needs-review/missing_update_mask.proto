@@ -1,0 +1,59 @@
+// Example: Missing update_mask (must-fix)
+//
+// This event contract includes `after` (full snapshot) but omits the
+// `update_mask` field. Without update_mask, consumers cannot determine
+// which fields actually changed — they must diff the entire entity
+// against prior state, which is fragile and defeats incremental
+// processing.
+//
+// Expected findings:
+//   - Must-fix: Has `after` but no `update_mask` field
+//     (Producers SHOULD include `update_mask` to make change intent
+//      explicit and enable incremental consumers)
+//
+// Standard sections exercised:
+//   - Canonical change event pattern / Payload requirements
+//   - Semantics / update_mask
+
+syntax = "proto3";
+
+package example.accounts.v1;
+
+import "buf/validate/validate.proto";
+import "google/protobuf/timestamp.proto";
+
+message EventMeta {
+  string event_id = 1 [(buf.validate.field).string.min_len = 1];
+  google.protobuf.Timestamp event_time = 2 [(buf.validate.field).required = true];
+  google.protobuf.Timestamp ingest_time = 3 [(buf.validate.field).required = true];
+  string producer = 4 [(buf.validate.field).string.min_len = 1];
+  string schema_version = 5 [(buf.validate.field).string.min_len = 1];
+}
+
+enum Operation {
+  OPERATION_UNSPECIFIED = 0;
+  OPERATION_CREATE     = 1;
+  OPERATION_UPDATE     = 2;
+  OPERATION_DELETE     = 3;
+  OPERATION_SNAPSHOT   = 4;
+}
+
+message Account {
+  string account_id = 1 [(buf.validate.field).string.min_len = 1];
+  string display_name = 2;
+  string email = 3;
+  bool is_active = 4;
+}
+
+// Missing: no `update_mask` field — consumers cannot tell which fields
+// changed without diffing entire entity state.
+message AccountChangeEvent {
+  EventMeta meta = 1 [(buf.validate.field).required = true];
+  string account_id = 2 [(buf.validate.field).string.min_len = 1];
+
+  int64 sequence = 3 [(buf.validate.field).int64.gte = 0];
+  Operation op = 4 [(buf.validate.field).enum.defined_only = true];
+
+  // Has `after` but no update_mask — change intent is opaque.
+  Account after = 5;
+}

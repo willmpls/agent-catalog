@@ -1,0 +1,68 @@
+// Example: Bad enum definition (should-fix)
+//
+// The Op enum has multiple issues:
+//   - Missing UNSPECIFIED = 0 sentinel (proto3 default maps to a
+//     meaningful value instead of an explicit "unknown" state)
+//   - No `defined_only` constraint on the op field
+//   - Uses bare value names (UPSERT, DELETE, SNAPSHOT) instead of the
+//     canonical OPERATION_* prefix convention
+//   - Uses legacy UPSERT instead of CREATE + UPDATE
+//   - Enum is named `Op` instead of canonical `Operation`
+//
+// Expected findings:
+//   - Should-fix: Op enum missing *_UNSPECIFIED = 0 sentinel
+//   - Should-fix: op field missing (buf.validate.field).enum.defined_only
+//   - Should-fix: Enum values missing OPERATION_* prefix
+//   - Should-fix: Should use OPERATION_CREATE + OPERATION_UPDATE instead
+//     of legacy UPSERT
+//
+// Standard sections exercised:
+//   - Data quality / Schema-level (protovalidate)
+//     ("Enums: defined_only = true and always include *_UNSPECIFIED = 0")
+//   - Shared Contract Types (Operation enum naming convention)
+
+syntax = "proto3";
+
+package example.shipments.v1;
+
+import "buf/validate/validate.proto";
+import "google/protobuf/field_mask.proto";
+import "google/protobuf/timestamp.proto";
+
+message EventMeta {
+  string event_id = 1 [(buf.validate.field).string.min_len = 1];
+  google.protobuf.Timestamp event_time = 2 [(buf.validate.field).required = true];
+  google.protobuf.Timestamp ingest_time = 3 [(buf.validate.field).required = true];
+  string producer = 4 [(buf.validate.field).string.min_len = 1];
+  string schema_version = 5 [(buf.validate.field).string.min_len = 1];
+}
+
+// Bad: starts at 1 with no UNSPECIFIED = 0 sentinel.
+// Proto3 default (0) will not map to any defined value.
+// Also: bare value names (no OPERATION_* prefix), legacy UPSERT,
+// and enum named `Op` instead of `Operation`.
+enum Op {
+  UPSERT = 0;
+  DELETE = 1;
+  SNAPSHOT = 2;
+}
+
+message Shipment {
+  string shipment_id = 1 [(buf.validate.field).string.min_len = 1];
+  string order_id = 2 [(buf.validate.field).string.min_len = 1];
+  string carrier = 3;
+  string tracking_number = 4;
+}
+
+message ShipmentChangeEvent {
+  EventMeta meta = 1 [(buf.validate.field).required = true];
+  string shipment_id = 2 [(buf.validate.field).string.min_len = 1];
+
+  int64 sequence = 3 [(buf.validate.field).int64.gte = 0];
+  // Bad: no defined_only constraint — undefined enum values pass silently.
+  Op op = 4;
+
+  google.protobuf.FieldMask update_mask = 5;
+  Shipment patch = 6;
+  Shipment after = 7;
+}

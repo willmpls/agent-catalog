@@ -1,0 +1,129 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://acme.com/schemas/notification-event/v1",
+  "title": "NotificationEvent",
+  "description": "Fired by the notification service. Polymorphic: the 'channel' determines which delivery details are present. This is a fire-and-forget event (no entity state to update), but we track delivery status changes over time.",
+  "type": "object",
+  "required": ["event_id", "occurred_at", "notification_id", "channel", "recipient", "status"],
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "occurred_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "notification_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Stable ID for this notification across status changes."
+    },
+    "status": {
+      "type": "string",
+      "enum": ["queued", "sent", "delivered", "bounced", "failed", "opened", "clicked"],
+      "description": "Current delivery status."
+    },
+    "channel": {
+      "type": "string",
+      "enum": ["email", "sms", "push", "in_app", "webhook"]
+    },
+    "recipient": {
+      "type": "object",
+      "required": ["user_id"],
+      "properties": {
+        "user_id": { "type": "string", "format": "uuid" },
+        "email": { "type": ["string", "null"], "format": "email" },
+        "phone": { "type": ["string", "null"] },
+        "device_token": { "type": ["string", "null"] }
+      },
+      "description": "Who gets the notification. Only the relevant contact field is populated based on channel."
+    },
+    "content": {
+      "type": "object",
+      "properties": {
+        "template_id": { "type": "string" },
+        "subject": { "type": ["string", "null"] },
+        "body_plain": { "type": ["string", "null"] },
+        "body_html": { "type": ["string", "null"] },
+        "deep_link": { "type": ["string", "null"], "format": "uri" },
+        "template_vars": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        }
+      }
+    },
+    "email_details": {
+      "type": ["object", "null"],
+      "description": "Present only when channel=email.",
+      "properties": {
+        "from_address": { "type": "string", "format": "email" },
+        "reply_to": { "type": ["string", "null"], "format": "email" },
+        "cc": { "type": "array", "items": { "type": "string", "format": "email" } },
+        "attachments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["filename", "content_type", "size_bytes"],
+            "properties": {
+              "filename": { "type": "string" },
+              "content_type": { "type": "string" },
+              "size_bytes": { "type": "integer" },
+              "url": { "type": "string", "format": "uri" }
+            }
+          }
+        }
+      }
+    },
+    "sms_details": {
+      "type": ["object", "null"],
+      "description": "Present only when channel=sms.",
+      "properties": {
+        "from_number": { "type": "string" },
+        "segment_count": { "type": "integer" }
+      }
+    },
+    "push_details": {
+      "type": ["object", "null"],
+      "description": "Present only when channel=push.",
+      "properties": {
+        "platform": { "type": "string", "enum": ["ios", "android", "web"] },
+        "badge_count": { "type": ["integer", "null"] },
+        "sound": { "type": ["string", "null"] },
+        "collapse_key": { "type": ["string", "null"] }
+      }
+    },
+    "webhook_details": {
+      "type": ["object", "null"],
+      "description": "Present only when channel=webhook.",
+      "properties": {
+        "url": { "type": "string", "format": "uri" },
+        "http_method": { "type": "string", "enum": ["POST", "PUT"] },
+        "response_code": { "type": ["integer", "null"] },
+        "response_time_ms": { "type": ["integer", "null"] }
+      }
+    },
+    "delivery_attempts": {
+      "type": "integer",
+      "default": 0,
+      "description": "Number of delivery attempts so far."
+    },
+    "last_error": {
+      "type": ["string", "null"],
+      "description": "Error message from most recent failed attempt."
+    },
+    "triggered_by": {
+      "type": "object",
+      "description": "What caused this notification to be sent.",
+      "properties": {
+        "trigger_type": {
+          "type": "string",
+          "enum": ["event", "schedule", "manual", "api"]
+        },
+        "source_event_id": { "type": ["string", "null"] },
+        "source_entity_type": { "type": ["string", "null"] },
+        "source_entity_id": { "type": ["string", "null"] }
+      }
+    }
+  }
+}

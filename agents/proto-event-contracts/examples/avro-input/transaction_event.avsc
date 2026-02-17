@@ -1,0 +1,102 @@
+{
+  "type": "record",
+  "name": "TransactionEvent",
+  "namespace": "com.acme.payments",
+  "doc": "Emitted by the payments gateway. Each record is a single payment attempt or state change.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "string",
+      "doc": "Unique event identifier."
+    },
+    {
+      "name": "occurred_at",
+      "type": "long",
+      "logicalType": "timestamp-millis",
+      "doc": "When the transaction state changed."
+    },
+    {
+      "name": "transaction_id",
+      "type": "string"
+    },
+    {
+      "name": "order_id",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Associated order. Null for standalone refunds."
+    },
+    {
+      "name": "amount",
+      "type": "double",
+      "doc": "Transaction amount in dollars (e.g. 29.99)."
+    },
+    {
+      "name": "currency",
+      "type": "string",
+      "default": "USD"
+    },
+    {
+      "name": "status",
+      "type": {
+        "type": "enum",
+        "name": "TxnStatus",
+        "symbols": ["PENDING", "AUTHORIZED", "CAPTURED", "FAILED", "REFUNDED", "VOIDED"]
+      }
+    },
+    {
+      "name": "payment_method",
+      "type": [
+        "null",
+        {
+          "type": "record",
+          "name": "CardPayment",
+          "fields": [
+            {"name": "last_four", "type": "string"},
+            {"name": "brand", "type": "string"},
+            {"name": "exp_month", "type": "int"},
+            {"name": "exp_year", "type": "int"}
+          ]
+        },
+        {
+          "type": "record",
+          "name": "BankTransfer",
+          "fields": [
+            {"name": "routing_number", "type": "string"},
+            {"name": "account_last_four", "type": "string"}
+          ]
+        },
+        {
+          "type": "record",
+          "name": "WalletPayment",
+          "fields": [
+            {"name": "provider", "type": "string"},
+            {"name": "wallet_id", "type": "string"}
+          ]
+        }
+      ],
+      "default": null,
+      "doc": "Polymorphic payment method."
+    },
+    {
+      "name": "metadata",
+      "type": {
+        "type": "map",
+        "values": "string"
+      },
+      "default": {},
+      "doc": "Free-form key/value pairs from the gateway."
+    },
+    {
+      "name": "risk_score",
+      "type": ["null", "float"],
+      "default": null,
+      "doc": "ML fraud risk score, 0.0 to 1.0."
+    },
+    {
+      "name": "processor_response",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Raw response code from the payment processor."
+    }
+  ]
+}

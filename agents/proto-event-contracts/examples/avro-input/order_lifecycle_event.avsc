@@ -1,0 +1,362 @@
+{
+  "type": "record",
+  "name": "OrderLifecycleEvent",
+  "namespace": "com.acme.orders",
+  "doc": "Emitted by the OMS on every order state change. Carries both the full order snapshot and a description of what changed. Orders can have multiple fulfillments (ship, pickup, digital), each with their own line items, tracking, and state machine. Payments can be split across methods.",
+  "fields": [
+    {
+      "name": "event_id",
+      "type": "string"
+    },
+    {
+      "name": "event_timestamp",
+      "type": "long",
+      "logicalType": "timestamp-millis"
+    },
+    {
+      "name": "source",
+      "type": "string",
+      "doc": "Producing system (e.g. 'oms-v3', 'cs-tool')."
+    },
+    {
+      "name": "change_type",
+      "type": {
+        "type": "enum",
+        "name": "ChangeType",
+        "symbols": ["CREATED", "UPDATED", "CANCELLED"]
+      }
+    },
+    {
+      "name": "changed_paths",
+      "type": {
+        "type": "array",
+        "items": "string"
+      },
+      "default": [],
+      "doc": "Dot-delimited paths of fields that changed (e.g. 'fulfillments.0.status', 'totals.tax_cents'). Empty on CREATED."
+    },
+    {
+      "name": "order_id",
+      "type": "string"
+    },
+    {
+      "name": "customer_id",
+      "type": "string"
+    },
+    {
+      "name": "order_status",
+      "type": {
+        "type": "enum",
+        "name": "OrderStatus",
+        "symbols": [
+          "PENDING",
+          "CONFIRMED",
+          "PARTIALLY_FULFILLED",
+          "FULFILLED",
+          "CANCELLED",
+          "RETURNED"
+        ]
+      }
+    },
+    {
+      "name": "channel",
+      "type": {
+        "type": "enum",
+        "name": "SalesChannel",
+        "symbols": ["WEB", "MOBILE_APP", "POS", "MARKETPLACE", "PHONE"]
+      }
+    },
+    {
+      "name": "placed_at",
+      "type": ["null", "long"],
+      "default": null,
+      "doc": "Epoch millis when the order was placed. Null if still in draft."
+    },
+    {
+      "name": "confirmed_at",
+      "type": ["null", "long"],
+      "default": null
+    },
+    {
+      "name": "cancelled_at",
+      "type": ["null", "long"],
+      "default": null
+    },
+    {
+      "name": "line_items",
+      "type": {
+        "type": "array",
+        "items": {
+          "type": "record",
+          "name": "LineItem",
+          "fields": [
+            {"name": "line_item_id", "type": "string"},
+            {"name": "sku", "type": "string"},
+            {"name": "product_name", "type": "string"},
+            {"name": "quantity", "type": "int"},
+            {"name": "unit_price_cents", "type": "long"},
+            {"name": "discount_cents", "type": "long", "default": 0},
+            {
+              "name": "item_type",
+              "type": {
+                "type": "enum",
+                "name": "ItemType",
+                "symbols": ["PHYSICAL", "DIGITAL", "SERVICE", "GIFT_CARD"]
+              }
+            },
+            {
+              "name": "customizations",
+              "type": {
+                "type": "map",
+                "values": "string"
+              },
+              "default": {},
+              "doc": "Engraving, gift wrap, etc."
+            },
+            {
+              "name": "fulfillment_id",
+              "type": ["null", "string"],
+              "default": null,
+              "doc": "Null until assigned to a fulfillment."
+            },
+            {
+              "name": "return_info",
+              "type": ["null", {
+                "type": "record",
+                "name": "ReturnInfo",
+                "fields": [
+                  {"name": "return_id", "type": "string"},
+                  {"name": "reason", "type": "string"},
+                  {"name": "quantity_returned", "type": "int"},
+                  {"name": "refund_amount_cents", "type": "long"},
+                  {
+                    "name": "return_status",
+                    "type": {
+                      "type": "enum",
+                      "name": "ReturnStatus",
+                      "symbols": ["REQUESTED", "APPROVED", "RECEIVED", "REFUNDED", "DENIED"]
+                    }
+                  },
+                  {"name": "initiated_at", "type": "long", "logicalType": "timestamp-millis"}
+                ]
+              }],
+              "default": null
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "fulfillments",
+      "type": {
+        "type": "array",
+        "items": {
+          "type": "record",
+          "name": "Fulfillment",
+          "fields": [
+            {"name": "fulfillment_id", "type": "string"},
+            {
+              "name": "fulfillment_type",
+              "type": [
+                {
+                  "type": "record",
+                  "name": "ShipFulfillment",
+                  "fields": [
+                    {"name": "carrier", "type": "string"},
+                    {"name": "tracking_number", "type": ["null", "string"], "default": null},
+                    {"name": "shipping_method", "type": "string"},
+                    {"name": "estimated_delivery", "type": ["null", "long"], "default": null},
+                    {
+                      "name": "shipping_address",
+                      "type": {
+                        "type": "record",
+                        "name": "PostalAddress",
+                        "fields": [
+                          {"name": "name", "type": "string"},
+                          {"name": "line1", "type": "string"},
+                          {"name": "line2", "type": ["null", "string"], "default": null},
+                          {"name": "city", "type": "string"},
+                          {"name": "state", "type": "string"},
+                          {"name": "postal_code", "type": "string"},
+                          {"name": "country_code", "type": "string"}
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "record",
+                  "name": "PickupFulfillment",
+                  "fields": [
+                    {"name": "store_id", "type": "string"},
+                    {"name": "store_name", "type": "string"},
+                    {"name": "pickup_window_start", "type": "long", "logicalType": "timestamp-millis"},
+                    {"name": "pickup_window_end", "type": "long", "logicalType": "timestamp-millis"},
+                    {"name": "pickup_code", "type": ["null", "string"], "default": null}
+                  ]
+                },
+                {
+                  "type": "record",
+                  "name": "DigitalFulfillment",
+                  "fields": [
+                    {"name": "download_url", "type": ["null", "string"], "default": null},
+                    {"name": "license_key", "type": ["null", "string"], "default": null},
+                    {"name": "expires_at", "type": ["null", "long"], "default": null}
+                  ]
+                }
+              ]
+            },
+            {
+              "name": "status",
+              "type": {
+                "type": "enum",
+                "name": "FulfillmentStatus",
+                "symbols": ["PENDING", "PROCESSING", "SHIPPED", "READY_FOR_PICKUP", "DELIVERED", "PICKED_UP", "FAILED"]
+              }
+            },
+            {"name": "created_at", "type": "long", "logicalType": "timestamp-millis"},
+            {"name": "updated_at", "type": "long", "logicalType": "timestamp-millis"},
+            {
+              "name": "status_history",
+              "type": {
+                "type": "array",
+                "items": {
+                  "type": "record",
+                  "name": "StatusEntry",
+                  "fields": [
+                    {"name": "status", "type": "FulfillmentStatus"},
+                    {"name": "timestamp", "type": "long", "logicalType": "timestamp-millis"},
+                    {"name": "note", "type": ["null", "string"], "default": null}
+                  ]
+                }
+              },
+              "default": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "payments",
+      "type": {
+        "type": "array",
+        "items": {
+          "type": "record",
+          "name": "PaymentSplit",
+          "fields": [
+            {"name": "payment_id", "type": "string"},
+            {
+              "name": "method",
+              "type": {
+                "type": "enum",
+                "name": "PaymentMethodType",
+                "symbols": ["CREDIT_CARD", "DEBIT_CARD", "GIFT_CARD", "STORE_CREDIT", "PAYPAL", "AFFIRM", "APPLE_PAY"]
+              }
+            },
+            {"name": "amount_cents", "type": "long"},
+            {"name": "currency", "type": "string", "default": "USD"},
+            {
+              "name": "status",
+              "type": {
+                "type": "enum",
+                "name": "PaymentStatus",
+                "symbols": ["PENDING", "AUTHORIZED", "CAPTURED", "FAILED", "REFUNDED", "PARTIALLY_REFUNDED"]
+              }
+            },
+            {"name": "authorized_at", "type": ["null", "long"], "default": null},
+            {"name": "captured_at", "type": ["null", "long"], "default": null},
+            {
+              "name": "card_details",
+              "type": ["null", {
+                "type": "record",
+                "name": "CardDetails",
+                "fields": [
+                  {"name": "brand", "type": "string"},
+                  {"name": "last_four", "type": "string"},
+                  {"name": "exp_month", "type": "int"},
+                  {"name": "exp_year", "type": "int"}
+                ]
+              }],
+              "default": null,
+              "doc": "Present only for card payments."
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "totals",
+      "type": {
+        "type": "record",
+        "name": "OrderTotals",
+        "fields": [
+          {"name": "subtotal_cents", "type": "long"},
+          {"name": "discount_cents", "type": "long", "default": 0},
+          {"name": "shipping_cents", "type": "long", "default": 0},
+          {"name": "tax_cents", "type": "long", "default": 0},
+          {"name": "total_cents", "type": "long"},
+          {"name": "currency", "type": "string", "default": "USD"}
+        ]
+      }
+    },
+    {
+      "name": "applied_promotions",
+      "type": {
+        "type": "array",
+        "items": {
+          "type": "record",
+          "name": "AppliedPromotion",
+          "fields": [
+            {"name": "promo_code", "type": "string"},
+            {"name": "promo_name", "type": "string"},
+            {
+              "name": "discount_type",
+              "type": {
+                "type": "enum",
+                "name": "DiscountType",
+                "symbols": ["PERCENTAGE", "FIXED_AMOUNT", "FREE_SHIPPING", "BOGO"]
+              }
+            },
+            {"name": "discount_value_cents", "type": "long"},
+            {
+              "name": "applicable_items",
+              "type": {
+                "type": "array",
+                "items": "string"
+              },
+              "default": [],
+              "doc": "line_item_ids this promo applies to. Empty means order-level."
+            }
+          ]
+        }
+      },
+      "default": []
+    },
+    {
+      "name": "notes",
+      "type": {
+        "type": "array",
+        "items": {
+          "type": "record",
+          "name": "OrderNote",
+          "fields": [
+            {"name": "author", "type": "string"},
+            {"name": "content", "type": "string"},
+            {"name": "created_at", "type": "long", "logicalType": "timestamp-millis"},
+            {"name": "is_customer_visible", "type": "boolean", "default": false}
+          ]
+        }
+      },
+      "default": []
+    },
+    {
+      "name": "tags",
+      "type": {
+        "type": "map",
+        "values": "string"
+      },
+      "default": {},
+      "doc": "Arbitrary labels (e.g. 'fraud_review': 'passed', 'priority': 'high')."
+    }
+  ]
+}

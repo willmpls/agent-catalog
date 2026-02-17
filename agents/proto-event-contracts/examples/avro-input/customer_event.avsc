@@ -1,0 +1,84 @@
+{
+  "type": "record",
+  "name": "CustomerEvent",
+  "namespace": "com.acme.customers",
+  "doc": "Emitted by the CRM service whenever a customer record changes.",
+  "fields": [
+    {
+      "name": "event_id",
+      "type": "string"
+    },
+    {
+      "name": "timestamp",
+      "type": "long",
+      "doc": "Epoch millis when the change happened."
+    },
+    {
+      "name": "type",
+      "type": {
+        "type": "enum",
+        "name": "EventType",
+        "symbols": ["UPSERT", "DELETE"]
+      }
+    },
+    {
+      "name": "customer_id",
+      "type": "string"
+    },
+    {
+      "name": "name",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Customer display name. Null if not changed."
+    },
+    {
+      "name": "email",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Null if not changed."
+    },
+    {
+      "name": "loyalty_tier",
+      "type": ["null", {
+        "type": "enum",
+        "name": "LoyaltyTier",
+        "symbols": ["BRONZE", "SILVER", "GOLD", "PLATINUM"]
+      }],
+      "default": null,
+      "doc": "Null if not changed."
+    },
+    {
+      "name": "lifetime_spend",
+      "type": "double",
+      "doc": "Total spend in USD."
+    },
+    {
+      "name": "tags",
+      "type": {
+        "type": "map",
+        "values": "string"
+      },
+      "default": {},
+      "doc": "Arbitrary key/value labels."
+    },
+    {
+      "name": "addresses",
+      "type": {
+        "type": "array",
+        "items": {
+          "type": "record",
+          "name": "Address",
+          "fields": [
+            {"name": "line1", "type": "string"},
+            {"name": "line2", "type": ["null", "string"], "default": null},
+            {"name": "city", "type": "string"},
+            {"name": "state", "type": "string"},
+            {"name": "zip", "type": "string"},
+            {"name": "country", "type": "string"}
+          ]
+        }
+      },
+      "default": []
+    }
+  ]
+}

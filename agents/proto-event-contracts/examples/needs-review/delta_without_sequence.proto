@@ -1,0 +1,62 @@
+// Example: Delta-only without sequence (should-fix)
+//
+// This event contract is designed for a delta-only (patch) producer
+// but omits the `sequence` field. In true multi-writer systems, a
+// monotonic per-key sequence typically requires coordination; without
+// it, consumers are implicitly relying on last-write-wins (LWW)
+// semantics using time + tie-break.
+//
+// Expected findings:
+//   - Should-fix: Patch-only without a monotonic `sequence` implies
+//     best-effort LWW semantics; call out limitations and prefer Tier A
+//     (`after` + `update_mask`) or a future CDC/outbox path for
+//     correctness-critical consumers.
+//
+// Standard sections exercised:
+//   - Delta-only patch semantics in multi-writer systems (LWW best-effort)
+//   - Producer capability tiers / Tier A preferred
+
+syntax = "proto3";
+
+package example.subscriptions.v1;
+
+import "buf/validate/validate.proto";
+import "google/protobuf/field_mask.proto";
+import "google/protobuf/timestamp.proto";
+
+message EventMeta {
+  string event_id = 1 [(buf.validate.field).string.min_len = 1];
+  google.protobuf.Timestamp event_time = 2 [(buf.validate.field).required = true];
+  google.protobuf.Timestamp ingest_time = 3 [(buf.validate.field).required = true];
+  string producer = 4 [(buf.validate.field).string.min_len = 1];
+  string schema_version = 5 [(buf.validate.field).string.min_len = 1];
+}
+
+enum Operation {
+  OPERATION_UNSPECIFIED = 0;
+  OPERATION_CREATE     = 1;
+  OPERATION_UPDATE     = 2;
+  OPERATION_DELETE     = 3;
+  OPERATION_SNAPSHOT   = 4;
+}
+
+message Subscription {
+  string subscription_id = 1 [(buf.validate.field).string.min_len = 1];
+  string customer_id = 2 [(buf.validate.field).string.min_len = 1];
+  string plan = 3;
+  bool auto_renew = 4;
+}
+
+// Missing: no `sequence` field — this is a delta-only producer (no
+// `after`), so consumers are relying on best-effort LWW semantics.
+message SubscriptionChangeEvent {
+  EventMeta meta = 1 [(buf.validate.field).required = true];
+  string subscription_id = 2 [(buf.validate.field).string.min_len = 1];
+
+  // No sequence field — implies best-effort LWW semantics; prefer Tier A/CDC when correctness matters.
+  Operation op = 3 [(buf.validate.field).enum.defined_only = true];
+
+  google.protobuf.FieldMask update_mask = 4;
+  // Delta-only: patch without `after`.
+  Subscription patch = 5;
+}

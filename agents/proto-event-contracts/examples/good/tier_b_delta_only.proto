@@ -1,0 +1,83 @@
+// Example: Tier B delta-only event contract (correct)
+//
+// Demonstrates a well-formed delta-only event contract for producers
+// that cannot hydrate full state. Uses `patch` + `update_mask` +
+// monotonic `sequence` without an `after` field.
+//
+// Expected findings: none (clean review)
+//
+// Standard sections exercised:
+//   - Canonical change event pattern / Required fields
+//   - Producer capability tiers / Tier B (delta-only, temporary)
+//   - Ordering and idempotency / sequence
+//   - Data quality / Schema-level (protovalidate)
+//   - Documentation requirements (every element commented)
+
+syntax = "proto3";
+
+package example.inventory.v1;
+
+import "buf/validate/validate.proto";
+import "google/protobuf/field_mask.proto";
+import "google/protobuf/timestamp.proto";
+
+// Metadata common to all events in this package.
+message EventMeta {
+  // Globally unique identifier for deduplication.
+  string event_id = 1 [(buf.validate.field).string.min_len = 1];
+  // When the change occurred.
+  google.protobuf.Timestamp event_time = 2 [(buf.validate.field).required = true];
+  // When the platform ingested this event.
+  google.protobuf.Timestamp ingest_time = 3 [(buf.validate.field).required = true];
+  // Identifier of the producing system.
+  string producer = 4 [(buf.validate.field).string.min_len = 1];
+  // Schema version tag for consumer branching during migrations.
+  string schema_version = 5 [(buf.validate.field).string.min_len = 1];
+}
+
+// Change operation for entity lifecycle events.
+enum Operation {
+  // Default/unknown value.
+  OPERATION_UNSPECIFIED = 0;
+  // Entity was created.
+  OPERATION_CREATE     = 1;
+  // Entity was updated.
+  OPERATION_UPDATE     = 2;
+  // Entity was deleted (tombstone).
+  OPERATION_DELETE     = 3;
+  // Periodic full-state snapshot.
+  OPERATION_SNAPSHOT   = 4;
+}
+
+// An inventory item tracked per SKU and warehouse location.
+message InventoryItem {
+  // Stock-keeping unit identifier.
+  string sku = 1 [(buf.validate.field).string.min_len = 1];
+  // Warehouse where this item is stocked.
+  string warehouse_id = 2 [(buf.validate.field).string.min_len = 1];
+  // Current quantity available in the warehouse.
+  int32 quantity_on_hand = 3 [(buf.validate.field).int32.gte = 0];
+  // Human-readable item label.
+  string display_name = 4;
+}
+
+// Change event for the InventoryItem entity.
+message InventoryChangeEvent {
+  // Event metadata (id, timestamps, producer, version).
+  EventMeta meta = 1 [(buf.validate.field).required = true];
+  // Entity key part 1 — top-level for partitioning.
+  string sku = 2 [(buf.validate.field).string.min_len = 1];
+  // Entity key part 2 — composite key with sku.
+  string warehouse_id = 3 [(buf.validate.field).string.min_len = 1];
+  // Monotonic per (sku, warehouse_id). Required for delta-only producers.
+  int64 sequence = 4 [(buf.validate.field).int64.gte = 0];
+  // What kind of change this event represents.
+  Operation op = 5 [(buf.validate.field).enum.defined_only = true];
+  // Paths of fields that changed — required for delta-only producers.
+  google.protobuf.FieldMask update_mask = 6;
+  // Delta values for paths listed in update_mask (Tier B — no `after` available).
+  InventoryItem patch = 7;
+  // Tier B: `after` is intentionally omitted. This producer cannot
+  // hydrate full state; consumers must apply patches using update_mask
+  // and sequence to maintain a correct snapshot.
+}
