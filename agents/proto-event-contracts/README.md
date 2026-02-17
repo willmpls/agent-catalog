@@ -6,36 +6,31 @@ A self-contained OpenCode agent that reviews and evolves protobuf event/message 
 
 The standard defines two producer capability tiers. Both use the same event envelope; the difference is how they represent the entity state after a change.
 
-**Scenario**: A retailer's order management system updates the shipping address on order `order-456`.
+**Scenario**: A CRM service updates a customer's email address.
 
 ### Tier A (hybrid — preferred)
 
 The event carries a full post-change snapshot (`after`) plus a mask of what changed (`update_mask`):
 
 ```
-OrderChangeEvent {
-  meta: { event_id: "evt-99", event_time: ..., producer: "oms-svc", ... }
-  order_id: "order-456"
-  sequence: 17
+CustomerChangeEvent {
+  meta: { event_id: "evt-1", event_time: ..., producer: "crm-svc", ... }
+  customer_id: "cust-123"
+  sequence: 42
   op: OPERATION_UPDATE
-  update_mask: { paths: ["shipping_address"] }
+  update_mask: { paths: ["email"] }
   after: {
-    order_id: "order-456"
-    status: ORDER_STATUS_CONFIRMED
-    shipping_address: {                   // <-- changed
-      street: "742 Evergreen Terrace"
-      city: "Springfield"
-      state: "IL"
-    }
-    line_items: [ ... ]                   // <-- unchanged, still present
-    total_amount_cents: 4999              // <-- unchanged, still present
+    customer_id: "cust-123"
+    email: "new@example.com"               // <-- changed
+    display_name: "Alice"                  // <-- unchanged, still present
+    loyalty_tier: CUSTOMER_TIER_GOLD       // <-- unchanged, still present
   }
 }
 ```
 
 Consumers have two options:
 1. **Simple path** — ignore `update_mask`, replace local state with `after`. Always correct, zero logic.
-2. **Incremental path** — use `update_mask` to know *what* changed. Useful for audit logs, incremental lake MERGE, or triggering downstream actions only on specific field changes ("notify warehouse when `shipping_address` changes").
+2. **Incremental path** — use `update_mask` to know *what* changed. Useful for audit logs, incremental lake MERGE, or triggering downstream actions only on specific field changes.
 
 Every event is self-contained. Miss an event or apply out of order? Just take the latest `after`. No `patch` field — changed values are read from `after` using `update_mask` paths.
 
@@ -44,18 +39,14 @@ Every event is self-contained. Miss an event or apply out of order? Just take th
 The event carries only the changed values (`patch`) plus the mask:
 
 ```
-OrderChangeEvent {
-  meta: { event_id: "evt-99", event_time: ..., producer: "oms-svc", ... }
-  order_id: "order-456"
-  sequence: 17
+CustomerChangeEvent {
+  meta: { event_id: "evt-1", event_time: ..., producer: "crm-svc", ... }
+  customer_id: "cust-123"
+  sequence: 42
   op: OPERATION_UPDATE
-  update_mask: { paths: ["shipping_address"] }
+  update_mask: { paths: ["email"] }
   patch: {
-    shipping_address: {                   // <-- only the changed field
-      street: "742 Evergreen Terrace"
-      city: "Springfield"
-      state: "IL"
-    }
+    email: "new@example.com"               // <-- only the changed field
   }
 }
 ```
@@ -64,7 +55,7 @@ No `after`, no full snapshot. The consumer must look up existing state, apply on
 
 ### Why `update_mask` matters (even when you have `patch`)
 
-Proto3 doesn't serialize default values. An `int32` set to `0` looks identical to "field not included" on the wire. So if a producer sets `quantity` to `0` (sold out), `patch` alone can't distinguish that from "quantity wasn't part of this update." `update_mask` is the source of truth for which fields are part of the mutation.
+Proto3 doesn't serialize default values. A `bool` set to `false` or an `int32` set to `0` looks identical to "field not included" on the wire. `update_mask` is the source of truth for which fields are part of the mutation.
 
 This is especially important for lake materialization:
 - **Ledger table** — `update_mask_paths` stored as `ARRAY<STRING>` lets you query "which events touched field X" without diffing columns.
