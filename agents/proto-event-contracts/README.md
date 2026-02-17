@@ -2,6 +2,86 @@
 
 A self-contained OpenCode agent that reviews and evolves protobuf event/message schemas against a hybrid event contract standard, plus test fixtures and an eval harness to validate that it works.
 
+## How It Works — Tier A vs Tier B by Example
+
+The standard defines two producer capability tiers. Both use the same event envelope; the difference is how they represent the entity state after a change.
+
+**Scenario**: A retailer's order management system updates the shipping address on order `order-456`.
+
+### Tier A (hybrid — preferred)
+
+The event carries a full post-change snapshot (`after`) plus a mask of what changed (`update_mask`):
+
+```
+OrderChangeEvent {
+  meta: { event_id: "evt-99", event_time: ..., producer: "oms-svc", ... }
+  order_id: "order-456"
+  sequence: 17
+  op: OPERATION_UPDATE
+  update_mask: { paths: ["shipping_address"] }
+  after: {
+    order_id: "order-456"
+    status: ORDER_STATUS_CONFIRMED
+    shipping_address: {                   // <-- changed
+      street: "742 Evergreen Terrace"
+      city: "Springfield"
+      state: "IL"
+    }
+    line_items: [ ... ]                   // <-- unchanged, still present
+    total_amount_cents: 4999              // <-- unchanged, still present
+  }
+}
+```
+
+Consumers have two options:
+1. **Simple path** — ignore `update_mask`, replace local state with `after`. Always correct, zero logic.
+2. **Incremental path** — use `update_mask` to know *what* changed. Useful for audit logs, incremental lake MERGE, or triggering downstream actions only on specific field changes ("notify warehouse when `shipping_address` changes").
+
+Every event is self-contained. Miss an event or apply out of order? Just take the latest `after`. No `patch` field — changed values are read from `after` using `update_mask` paths.
+
+### Tier B (delta-only — fallback)
+
+The event carries only the changed values (`patch`) plus the mask:
+
+```
+OrderChangeEvent {
+  meta: { event_id: "evt-99", event_time: ..., producer: "oms-svc", ... }
+  order_id: "order-456"
+  sequence: 17
+  op: OPERATION_UPDATE
+  update_mask: { paths: ["shipping_address"] }
+  patch: {
+    shipping_address: {                   // <-- only the changed field
+      street: "742 Evergreen Terrace"
+      city: "Springfield"
+      state: "IL"
+    }
+  }
+}
+```
+
+No `after`, no full snapshot. The consumer must look up existing state, apply only the `update_mask` paths from `patch`, and hope no concurrent writer conflicts. `sequence` is strongly recommended — without it, consumers fall back to last-write-wins (LWW) using `event_time`.
+
+### Why `update_mask` matters (even when you have `patch`)
+
+Proto3 doesn't serialize default values. An `int32` set to `0` looks identical to "field not included" on the wire. So if a producer sets `quantity` to `0` (sold out), `patch` alone can't distinguish that from "quantity wasn't part of this update." `update_mask` is the source of truth for which fields are part of the mutation.
+
+This is especially important for lake materialization:
+- **Ledger table** — `update_mask_paths` stored as `ARRAY<STRING>` lets you query "which events touched field X" without diffing columns.
+- **Snapshot table** — the MERGE statement uses `update_mask` to know which columns to SET, avoiding overwriting unchanged fields with proto3 defaults.
+
+### Why Tier A is preferred
+
+| Concern | Tier A | Tier B |
+|---------|--------|--------|
+| Missed event | Self-heals — latest `after` is complete | Out of sync, no recovery without backfill |
+| Out-of-order delivery | Latest `after` wins | LWW on `event_time`, best-effort |
+| New consumer bootstrap | Any single event has full state | Needs separate snapshot mechanism |
+| Lake MERGE correctness | `after` has real values for all fields | Must apply `patch` paths carefully, zero-value ambiguity |
+| Zero-value writes | Not a problem — `after` carries real current values | Requires `update_mask` to disambiguate |
+
+Tier B exists for producers that cannot hydrate full state yet. The standard recommends planning a path to Tier A (CDC/outbox) for correctness-critical consumers.
+
 ## Install
 
 Copy the agent file into your project:
