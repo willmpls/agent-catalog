@@ -6,24 +6,25 @@ A self-contained OpenCode agent that reviews and evolves protobuf event/message 
 
 The standard defines two producer capability tiers. Both use the same event envelope; the difference is how they represent the entity state after a change.
 
-**Scenario**: A CRM service updates a customer's email address.
+**Scenario**: An order management service updates the quantity on order `order-456`.
 
 ### Tier A (hybrid — preferred)
 
 The event carries a full post-change snapshot (`after`) plus a mask of what changed (`update_mask`):
 
 ```
-CustomerChangeEvent {
-  meta: { event_id: "evt-1", event_time: ..., producer: "crm-svc", ... }
-  customer_id: "cust-123"
-  sequence: 42
+OrderChangeEvent {
+  meta: { event_id: "evt-99", event_time: ..., producer: "oms-svc", ... }
+  order_id: "order-456"
+  sequence: 17
   op: OPERATION_UPDATE
-  update_mask: { paths: ["email"] }
+  update_mask: { paths: ["quantity"] }
   after: {
-    customer_id: "cust-123"
-    email: "new@example.com"               // <-- changed
-    display_name: "Alice"                  // <-- unchanged, still present
-    loyalty_tier: CUSTOMER_TIER_GOLD       // <-- unchanged, still present
+    order_id: "order-456"
+    customer_id: "cust-123"                // <-- unchanged, still present
+    display_name: "Weekly restock"         // <-- unchanged, still present
+    quantity: 5                            // <-- changed
+    total_cents: 4999                      // <-- unchanged, still present
   }
 }
 ```
@@ -39,14 +40,14 @@ Every event is self-contained. Miss an event or apply out of order? Just take th
 The event carries only the changed values (`patch`) plus the mask:
 
 ```
-CustomerChangeEvent {
-  meta: { event_id: "evt-1", event_time: ..., producer: "crm-svc", ... }
-  customer_id: "cust-123"
-  sequence: 42
+OrderChangeEvent {
+  meta: { event_id: "evt-99", event_time: ..., producer: "oms-svc", ... }
+  order_id: "order-456"
+  sequence: 17
   op: OPERATION_UPDATE
-  update_mask: { paths: ["email"] }
+  update_mask: { paths: ["quantity"] }
   patch: {
-    email: "new@example.com"               // <-- only the changed field
+    quantity: 5                            // <-- only the changed field
   }
 }
 ```
